@@ -1,0 +1,206 @@
+---
+title: "jzeng21_OriginalHomeworkCode_03"
+format: html
+editor: visual
+---
+
+## ![](Zombie.jpg)
+
+## Notes
+
+```         
+```
+
+## Question 1
+
+```{r}
+# Calculate the population mean and standard deviation for each quantitative random variable (height, weight, age, number of zombies killed, and years of education). NOTE: You will not want to use the built in var() and sd() commands as these are for samples.
+
+#I am using the excel library to load the result data
+library(writexl)
+
+# Load the dataset
+zombies <- read.csv("/Users/jumbo/Desktop/BI588/AN588_Zombies_jzeng21/zombies.csv")
+
+# Yong's comment: good use of function to calculate standard deviation 
+# Function to compute mean and standard deviation
+mean_sd <- function(data, vars) {
+  results <- data.frame(feature = character(), mean = numeric(), sd = numeric(), stringsAsFactors = FALSE)
+  
+  for (x in vars) {  
+    m <- mean(data[[x]], na.rm = TRUE)
+    sd_value <- sd(data[[x]], na.rm = TRUE) * sqrt((nrow(data)-1)/nrow(data))
+    
+    results <- rbind(results, data.frame(feature = x, mean = m, sd = sd_value, stringsAsFactors = FALSE))
+  }
+  
+  return(results) 
+}
+
+# Call the function using the correct dataset name
+results <- mean_sd(zombies, c("height", "weight", "age", "zombies_killed", "years_of_education"))  
+
+# Export results to an Excel file
+# yong's comment: you can try cat() to directly print out the results
+write_xlsx(results, "/Users/jumbo/Desktop/BI588/AN588_Zombies_jzeng21/zombie_results.xlsx")
+
+```
+
+## Question 2
+
+```{r}
+# Use {ggplot} to make boxplots of each of these variables by gender.
+
+# Load required library
+library(ggplot2)
+
+# Read the dataset
+zombie_dataset <- read.csv("/Users/jumbo/Desktop/BI588/AN588_Zombies_jzeng21/zombies.csv")
+
+# Function to create boxplots by gender
+# Yong's comment: nice function, you can also try pivot_longer to resape the data to make the data frame more readily use ggplot 
+boxplot_gender <- function(data) {
+  vars <- c("height", "weight", "age", "zombies_killed", "years_of_education")
+  for (x in vars) {
+    print(ggplot(data, aes(x = as.factor(gender), y = .data[[x]])) + geom_boxplot() + 
+        ggtitle(paste(x, "Distrbution By Gender")) + xlab("Gender") +  ylab(x))
+  }
+}
+
+# Call the function
+boxplot_gender(zombie_dataset)
+
+
+#Got a use .data instead of data
+
+```
+
+## Question 3
+
+```{r}
+# Use {ggplot} to make scatterplots of height and weight in relation to age. Do these variables seem to be related? In what way?
+
+# yong's comment: you should include a brief commentary on the observed trends 
+
+scatter_plot <- function(data){
+  vars <- c("height","weight")
+  for (x in vars) {
+    print(ggplot(data,aes(x = age, y = .data[[x]]))+ geom_point() + geom_smooth(method = "lm") + ggtitle(paste(x, "vs.Age")))
+    
+  }
+}
+
+scatter_plot(zombie_dataset)
+```
+
+## Question 4
+
+```{r}
+#Using histograms and Q-Q plots, check whether the quantitative variables seem to be drawn from a normal distribution. Which seem to be and which do not (hint: not all are drawn from the normal distribution)? For those that are not normal, can you determine from which common distribution they are drawn?
+
+# yong;s comment: good use of built in function for creating qq plot, ggplot also works!
+
+norms <- function(data) {
+  vars <- c("height","weight","age","zombies_killed","years_of_education")
+  par(mfrow = c(2, length(vars)))
+  for (x in vars){
+    hist(data[[x]], main = paste("Histogram of", x),xlab = x)
+    qqnorm(data[[x]], main = paste("Q-Q Plot of", x))
+    qqline(data[[x]])
+  }
+  
+}
+
+norms(zombie_dataset)
+```
+
+## Question 5
+
+```{r}
+# Now use the sample() function to sample ONE subset of 30 zombie survivors (without replacement) from this population and calculate the mean and sample standard deviation for each variable. Also estimate the standard error for each variable, and construct the 95% confidence interval for each mean. Note that for the variables that are not drawn from the normal distribution, you may need to base your estimate of the CIs on slightly different code than for the normal…
+
+#yong's comment: when you are calculating 2 tailed 95 percent CI, the cirtical value should be 97.5th percentile, you can adjust accordingly 
+
+analyze_sample <- function(data, sample_size = 30) {
+  vars <- c("height", "weight", "age", "zombies_killed", "years_of_education")
+  sampled_data <- data[sample(1:nrow(data), sample_size, replace = FALSE), ]
+  results <- data.frame(Attribute = character(), Mean = numeric(), SD = numeric(), SE = numeric(), Lower_CI = numeric(), Upper_CI = numeric(),  stringsAsFactors = FALSE)
+  
+ for (x in vars) {
+    mean_val <- mean(sampled_data[[x]], na.rm = TRUE)
+    sd_val <- sd(sampled_data[[x]], na.rm = TRUE)
+    se_val <- sd_val / sqrt(sample_size)
+    t_value <- qt(0.95, df = sample_size -1)
+    ci_low <- mean_val - (t_value * se_val)
+    ci_up <- mean_val + (t_value * se_val)
+    results <- rbind(results, data.frame(vars = x, Mean = mean_val, SD = sd_val, SE = se_val, Lower_CI = ci_low, Upper_CI = ci_up))
+  }
+  return(results)  # Return the correct variable
+}
+analyze_sample(zombie_dataset)
+
+
+
+```
+
+\
+
+## Question 6
+
+```{r}
+#Now draw 99 more random samples of 30 zombie apocalypse survivors, and calculate the mean for each variable for each of these samples. Together with the first sample you drew, you now have a set of 100 means for each variable (each based on 30 observations), which constitutes a sampling distribution for each variable. What are the means and standard deviations of this distribution of means for each variable? How do the standard deviations of means compare to the standard errors estimated in [5]? What do these sampling distributions look like (a graph might help here)? Are they normally distributed? What about for those variables that you concluded were not originally drawn from a normal distribution?
+
+library(ggplot2)
+library(reshape2)
+
+sample_dist <- function(data, sample_size = 30, num_of_sam = 100) {
+  vars <- c("height", "weight", "age", "zombies_killed", "years_of_education")
+  m_results <- data.frame(matrix(nrow = num_of_sam, ncol = length(vars)))
+  colnames(m_results) <- vars
+  set.seed(123)  # Ensure reproducibility
+
+  # Generate multiple samples and store their means
+  for (i in 1:num_of_sam) {
+    sampled_data <- data[sample(1:nrow(data), sample_size, replace = FALSE), ]
+    m_results[i, ] <- colMeans(sampled_data[, vars], na.rm = TRUE)
+  }
+
+  # Compute Mean and SD of the Sample Means (Sampling Distribution)
+  sampling_stats <- data.frame(
+    variable = colnames(m_results),
+    m_means = colMeans(m_results),
+    sd_means = apply(m_results, 2, sd)
+  )
+
+  # Compute a single sample for Standard Errors
+  single_sample <- data[sample(1:nrow(data), sample_size, replace = FALSE), ]
+  original_se <- apply(single_sample[, vars], 2, function(x) sd(x, na.rm = TRUE) / sqrt(sample_size))
+
+  # Compare Standard Error from single sample to SD of means
+  comparison <- data.frame(
+    Variable = sampling_stats$variable,
+    single_se = original_se,
+    SD_of_sample_means = sampling_stats$sd_means
+  )
+
+  print("Comparison of SE vs SD of Sample Means:")
+  print(comparison)
+
+  # Visualizing Sampling Distributions
+  long_data <- melt(m_results)
+  ggplot(long_data, aes(x = value)) +
+    geom_histogram(bins = 15, fill = "blue", alpha = 0.6, color = "black") +
+    facet_wrap(~variable, scales = "free") +
+    theme_minimal() +
+    labs(title = "Sampling Distributions of Means", x = "Sample Mean", y = "Frequency")
+
+  return(list(Sampling_Statistics = sampling_stats, Comparison = comparison, Sample_Means = m_results))
+}
+
+# Run the function
+sampling_results <- sample_dist(zombie_dataset)
+
+
+
+
+```
